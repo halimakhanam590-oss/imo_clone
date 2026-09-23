@@ -1,226 +1,123 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Phone, 
   Video, 
   PhoneOff, 
   Search, 
-  MessageSquare, 
-  Users, 
-  Compass, 
+  Plus, 
   ArrowLeft, 
   Mic, 
   MicOff,
   MoreVertical,
-  ShieldCheck,
-  Smartphone
+  Smile,
+  Image as ImageIcon,
+  Send,
+  BellOff,
+  CheckCheck
 } from "lucide-react";
+
+interface Message {
+  id: string;
+  sender: "me" | "them";
+  text: string;
+  time: string;
+}
 
 interface Contact {
   id: string;
   name: string;
-  tel: string;
+  sub: string;
+  time: string;
+  unread?: number;
+  online?: boolean;
 }
 
-export default function ImoApp() {
-  const [step, setStep] = useState<"auth" | "permission" | "app">("auth");
-  const [userEmail, setUserEmail] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [activeTab, setActiveTab] = useState("chats");
-  const [inCall, setInCall] = useState(false);
-  const [callingUser, setCallingUser] = useState<string | null>(null);
+const INITIAL_CONTACTS: Contact[] = [
+  { id: "1", name: "My Life", sub: "আল্লাহ সব জানেন , অবশ্যই আল্লাহ সময় ম...", time: "Yesterday", online: true },
+  { id: "2", name: "Baba Gp", sub: "Tap to view", time: "8:50 am", online: true },
+  { id: "3", name: "Fatema Apa", sub: "Tap to view", time: "Yesterday", unread: 3, online: true },
+  { id: "4", name: "Rahima Gp", sub: "Audio call", time: "Yesterday", online: false },
+  { id: "5", name: "Popi", sub: "Audio call", time: "Yesterday", online: true },
+  { id: "6", name: "আমেনা আপা", sub: "Tap to view", time: "Yesterday", unread: 2, online: false },
+  { id: "7", name: "Ruma Apa", sub: "Audio call", time: "Sat", online: true },
+];
+
+export default function ImoDarkApp() {
+  const [activeChat, setActiveChat] = useState<Contact | null>(null);
+  const [messages, setMessages] = useState<{ [key: string]: Message[] }>({
+    "2": [
+      { id: "m1", sender: "them", text: "Kemon acho?", time: "8:48 am" },
+      { id: "m2", sender: "me", text: "Alhamdulillah bhalo, tumi?", time: "8:49 am" }
+    ]
+  });
+  const [inputVal, setInputVal] = useState("");
+  const [inCall, setInCall] = useState<"audio" | "video" | null>(null);
   const [micMuted, setMicMuted] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("imo_user_email");
-    const savedContacts = localStorage.getItem("imo_contacts");
-    if (savedUser && savedContacts) {
-      setUserEmail(savedUser);
-      try {
-        setContacts(JSON.parse(savedContacts));
-      } catch (e) {}
-      setStep("app");
-    }
-  }, []);
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, activeChat]);
 
-  const handleGoogleLogin = (e: React.FormEvent) => {
+  const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userEmail || !phoneNumber) return;
-    localStorage.setItem("imo_user_email", userEmail);
-    localStorage.setItem("imo_user_phone", phoneNumber);
-    setStep("permission");
+    if (!inputVal.trim() || !activeChat) return;
+
+    const newMsg: Message = {
+      id: Date.now().toString(),
+      sender: "me",
+      text: inputVal.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [activeChat.id]: [...(prev[activeChat.id] || []), newMsg]
+    }));
+    setInputVal("");
   };
 
-  const requestContactPermission = async () => {
-    if ("contacts" in navigator && "ContactsManager" in window) {
-      try {
-        const props = ["name", "tel"];
-        const selected = await (navigator as any).contacts.select(props, { multiple: true });
-        if (selected && selected.length > 0) {
-          const formatted: Contact[] = selected.map((c: any, index: number) => ({
-            id: Date.now() + "-" + index,
-            name: c.name?.[0] || "Unknown Contact",
-            tel: c.tel?.[0] || "",
-          }));
-          setContacts(formatted);
-          localStorage.setItem("imo_contacts", JSON.stringify(formatted));
-        }
-      } catch (err) {
-        console.log("Permission denied or cancelled");
-      }
-    } else {
-      // Fallback demo contacts if browser does not support contacts picker API
-      const defaultContacts: Contact[] = [
-        { id: "1", name: "Client 1", tel: "+8801700000001" },
-        { id: "2", name: "Client 2", tel: "+8801800000002" },
-      ];
-      setContacts(defaultContacts);
-      localStorage.setItem("imo_contacts", JSON.stringify(defaultContacts));
-    }
-    setStep("app");
-  };
-
-  const startCall = (name: string) => {
-    setCallingUser(name);
-    setInCall(true);
-  };
-
-  const endCall = () => {
-    setInCall(false);
-    setCallingUser(null);
-  };
-
-  // 1. Google & Phone Login Screen
-  if (step === "auth") {
+  // Video/Audio Call Screen
+  if (inCall && activeChat) {
     return (
-      <div className="flex flex-col h-screen w-full bg-white max-w-md mx-auto p-6 justify-between select-none">
-        <div className="flex flex-col items-center mt-8">
-          <div className="w-16 h-16 rounded-2xl bg-[#0088cc] flex items-center justify-center text-white text-3xl font-extrabold shadow-md mb-3">
-            i
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">imo Messenger</h1>
-          <p className="text-xs text-slate-400 mt-1">Sign in with your Google account & phone</p>
-        </div>
-
-        <form onSubmit={handleGoogleLogin} className="w-full space-y-4 my-auto">
-          <div>
-            <label className="text-xs font-semibold text-slate-600 mb-1 block">Google Email</label>
-            <input 
-              type="email" 
-              required
-              placeholder="example@gmail.com" 
-              value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
-              className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#0088cc]"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-600 mb-1 block">Phone Number</label>
-            <div className="flex items-center border border-slate-300 rounded-xl px-3 py-2.5">
-              <Smartphone className="w-4 h-4 text-slate-400 mr-2" />
-              <input 
-                type="tel" 
-                required
-                placeholder="+880 1XXX-XXXXXX" 
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full text-sm focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit"
-            className="w-full bg-[#0088cc] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[#0077b5] shadow transition mt-2"
-          >
-            Continue with Google
-          </button>
-        </form>
-
-        <p className="text-[11px] text-center text-slate-400 mb-4">
-          By signing in, you agree to imo Terms & Privacy Policy
-        </p>
-      </div>
-    );
-  }
-
-  // 2. Permission Request Screen
-  if (step === "permission") {
-    return (
-      <div className="flex flex-col h-screen w-full bg-white max-w-md mx-auto p-6 justify-between select-none">
-        <div className="flex flex-col items-center mt-12 text-center">
-          <div className="w-20 h-20 rounded-full bg-blue-50 text-[#0088cc] flex items-center justify-center mb-4">
-            <ShieldCheck className="w-10 h-10" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-800">Allow Contact Access</h2>
-          <p className="text-xs text-slate-500 mt-2 px-4 leading-relaxed">
-            imo needs access to your contacts to find friends, clients, and let you make free audio/video calls easily.
-          </p>
-        </div>
-
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-2">
-          <p className="flex items-center gap-2">✓ Automatic contact sync</p>
-          <p className="flex items-center gap-2">✓ See which clients are online</p>
-          <p className="flex items-center gap-2">✓ High-quality encrypted calls</p>
-        </div>
-
-        <div className="space-y-3 mb-6">
-          <button 
-            onClick={requestContactPermission}
-            className="w-full bg-[#0088cc] text-white py-3 rounded-xl font-semibold text-sm shadow hover:bg-[#0077b5] transition"
-          >
-            Allow Contact Permission
-          </button>
-          <button 
-            onClick={() => setStep("app")}
-            className="w-full bg-slate-100 text-slate-600 py-3 rounded-xl font-semibold text-sm hover:bg-slate-200 transition"
-          >
-            Skip for now
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Call Screen
-  if (inCall) {
-    return (
-      <div className="flex flex-col h-screen w-full bg-slate-900 text-white select-none">
-        <div className="flex items-center justify-between p-4 bg-gradient-to-b from-black/60 to-transparent">
-          <button onClick={endCall} className="p-2 rounded-full hover:bg-white/10">
+      <div className="flex flex-col h-screen w-full bg-[#121212] text-white select-none max-w-md mx-auto">
+        <div className="flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
+          <button onClick={() => setInCall(null)} className="p-2 rounded-full hover:bg-white/10">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <div className="text-center">
-            <h2 className="font-semibold text-lg">{callingUser}</h2>
-            <p className="text-xs text-green-400 font-medium">imo HD Calling...</p>
+            <h2 className="font-semibold text-lg">{activeChat.name}</h2>
+            <p className="text-xs text-green-400">{inCall === "video" ? "imo HD Video Calling..." : "imo Voice Calling..."}</p>
           </div>
-          <div className="w-10"></div>
+          <div className="w-8"></div>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center relative">
-          <div className="w-28 h-28 rounded-full bg-[#0088cc] flex items-center justify-center text-4xl font-bold border-4 border-white/20 animate-pulse">
-            {callingUser?.[0] || "U"}
+          <div className="w-28 h-28 rounded-full bg-[#20242a] border-2 border-cyan-500/40 flex items-center justify-center text-3xl font-bold text-cyan-400 animate-pulse shadow-2xl">
+            {activeChat.name[0]}
           </div>
-          <p className="mt-4 text-slate-300 text-sm">Connecting call...</p>
+          <p className="mt-4 text-xs text-neutral-400">Ringing...</p>
         </div>
 
-        <div className="p-8 flex items-center justify-around bg-gradient-to-t from-black/80 to-transparent">
+        <div className="p-8 flex items-center justify-around bg-[#181a1e] rounded-t-3xl border-t border-neutral-800">
           <button 
-            onClick={() => setMicMuted(!micMuted)}
-            className={`p-4 rounded-full ${micMuted ? "bg-red-500" : "bg-white/20"}`}
+            onClick={() => setMicMuted(!micMuted)} 
+            className={`p-4 rounded-full ${micMuted ? "bg-red-500" : "bg-neutral-800"}`}
           >
             {micMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
           </button>
           <button 
-            onClick={endCall}
-            className="p-5 rounded-full bg-red-600 shadow-xl"
+            onClick={() => setInCall(null)} 
+            className="p-5 rounded-full bg-red-600 hover:bg-red-700 shadow-xl"
           >
             <PhoneOff className="w-8 h-8 text-white" />
           </button>
-          <button className="p-4 rounded-full bg-white/20">
+          <button 
+            onClick={() => setInCall(inCall === "video" ? "audio" : "video")} 
+            className="p-4 rounded-full bg-neutral-800"
+          >
             <Video className="w-6 h-6 text-white" />
           </button>
         </div>
@@ -228,100 +125,222 @@ export default function ImoApp() {
     );
   }
 
-  // 3. Main Imo App
-  return (
-    <div className="flex flex-col h-screen w-full bg-slate-100 font-sans select-none max-w-md mx-auto">
-      {/* Top Header */}
-      <div className="bg-[#0088cc] text-white px-4 py-3 shadow-md">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-full bg-white text-[#0088cc] flex items-center justify-center font-bold text-lg shadow-inner">
-              i
-            </div>
+  // Inside Chat Room (Screenshot 2)
+  if (activeChat) {
+    const currentChatMsgs = messages[activeChat.id] || [];
+
+    return (
+      <div className="flex flex-col h-screen w-full bg-[#181a1d] text-white select-none max-w-md mx-auto">
+        {/* Chat Top Header */}
+        <div className="flex items-center justify-between px-3 py-3 border-b border-neutral-800 bg-[#1f2227]">
+          <div className="flex items-center space-x-2">
+            <button onClick={() => setActiveChat(null)} className="p-1 text-neutral-300">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
             <div>
-              <h1 className="text-lg font-bold">imo</h1>
-              <p className="text-[10px] text-blue-100 truncate max-w-[150px]">{userEmail || "Signed in"}</p>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-medium text-sm text-neutral-100">{activeChat.name}</h2>
+                <BellOff className="w-3.5 h-3.5 text-neutral-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">Online</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button className="p-2 hover:bg-white/10 rounded-full">
-              <Search className="w-5 h-5" />
+
+          <div className="flex items-center space-x-3 text-cyan-400">
+            <button onClick={() => setInCall("audio")} className="p-1 hover:text-cyan-300">
+              <Phone className="w-5 h-5 fill-cyan-400" />
             </button>
-            <button className="p-2 hover:bg-white/10 rounded-full">
+            <button onClick={() => setInCall("video")} className="p-1 hover:text-cyan-300">
+              <Video className="w-5 h-5 fill-cyan-400" />
+            </button>
+            <button className="p-1 text-neutral-300">
               <MoreVertical className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* Message Area */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex justify-center">
+            <span className="text-[11px] bg-[#24272e] text-neutral-400 px-3 py-1 rounded-full border border-neutral-700/50">
+              Tap to load history
+            </span>
+          </div>
+
+          {currentChatMsgs.map((msg) => (
+            <div 
+              key={msg.id} 
+              className={`flex flex-col ${msg.sender === "me" ? "items-end" : "items-start"}`}
+            >
+              <div 
+                className={`max-w-[75%] px-3.5 py-2 rounded-2xl text-sm ${
+                  msg.sender === "me" 
+                    ? "bg-[#0088cc] text-white rounded-tr-none" 
+                    : "bg-[#282c34] text-neutral-100 rounded-tl-none"
+                }`}
+              >
+                {msg.text}
+              </div>
+              <span className="text-[10px] text-neutral-500 mt-1 px-1">{msg.time}</span>
+            </div>
+          ))}
+          <div ref={chatBottomRef} />
+        </div>
+
+        {/* Quick Emoji Reaction Bar (As seen in screenshot) */}
+        <div className="px-3 py-1.5 flex items-center justify-between text-lg bg-[#1a1d21] border-t border-neutral-800/80">
+          <span>💎</span>
+          <span>😡</span>
+          <span>👨‍✈️</span>
+          <span>💋</span>
+          <span>🌹</span>
+          <span>❤️</span>
+          <span>😭</span>
+          <span>😆</span>
+        </div>
+
+        {/* Message Input Bottom Bar */}
+        <form onSubmit={handleSendMessage} className="p-2 bg-[#1a1d21] flex items-center space-x-2">
+          <div className="flex items-center bg-[#252830] rounded-full flex-1 px-3 py-1.5">
+            <Smile className="w-5 h-5 text-neutral-400 mr-2 cursor-pointer" />
+            <input 
+              type="text"
+              placeholder="Message"
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
+              className="bg-transparent text-sm text-white focus:outline-none flex-1 placeholder-neutral-500"
+            />
+            <ImageIcon className="w-5 h-5 text-neutral-400 ml-2 cursor-pointer" />
+            <Plus className="w-5 h-5 text-neutral-400 ml-2 cursor-pointer" />
+          </div>
+
+          {inputVal.trim() ? (
+            <button type="submit" className="p-2.5 rounded-full bg-[#0088cc] text-white shadow">
+              <Send className="w-4 h-4" />
+            </button>
+          ) : (
+            <button type="button" className="p-2.5 rounded-full bg-[#0095ff] text-white shadow">
+              <Mic className="w-5 h-5" />
+            </button>
+          )}
+        </form>
+      </div>
+    );
+  }
+
+  // Imo Main Home Screen - Dark Mode (Screenshot 1)
+  return (
+    <div className="flex flex-col h-screen w-full bg-[#17181c] text-white select-none max-w-md mx-auto">
+      {/* Topimo Navbar */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-2 bg-[#1f2126] border-b border-neutral-800">
+        <div className="relative">
+          <div className="w-8 h-8 rounded-full bg-[#343842] border border-cyan-400/40 flex items-center justify-center font-bold text-xs">
+            H
+          </div>
+        </div>
+
+        <div className="relative cursor-pointer">
+          <div className="w-7 h-7 flex items-center justify-center text-cyan-400">
+            <svg className="w-6 h-6 fill-cyan-400" viewBox="0 0 24 24">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+          </div>
+          <span className="absolute -top-1 -right-1 bg-green-500 text-black font-bold text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+            8
+          </span>
+          <div className="w-10 h-0.5 bg-cyan-400 mx-auto mt-1.5 rounded-full"></div>
+        </div>
+
+        <div className="cursor-pointer text-neutral-400 hover:text-white">
+          <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+          </svg>
+        </div>
       </div>
 
-      {/* Main Contacts / Chats */}
-      <div className="flex-1 overflow-y-auto bg-white divide-y divide-slate-100">
-        {contacts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-400">
-            <Users className="w-14 h-14 text-slate-300 mb-2" />
-            <p className="text-sm font-semibold text-slate-700">No synced contacts yet</p>
-            <p className="text-xs text-slate-400 mt-1">Tap below to grant contact permission</p>
-            <button
-              onClick={requestContactPermission}
-              className="mt-4 bg-[#0088cc] text-white text-xs px-4 py-2 rounded-full shadow hover:bg-[#0077b5]"
-            >
-              Sync Phone Contacts
-            </button>
+      {/* Story Bubbles Row */}
+      <div className="flex items-center space-x-4 px-3 py-3 overflow-x-auto bg-[#17181c] no-scrollbar border-b border-neutral-800/60">
+        <div className="flex flex-col items-center flex-shrink-0">
+          <div className="w-12 h-12 rounded-full bg-[#292c34] flex items-center justify-center relative border border-neutral-700">
+            <svg className="w-5 h-5 text-neutral-300" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+              <path d="M9 2L7.17 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2h-3.17L15 2H9z" />
+            </svg>
+            <span className="absolute bottom-0 right-0 w-4 h-4 bg-cyan-400 rounded-full flex items-center justify-center text-black text-xs font-bold leading-none">+</span>
           </div>
-        ) : (
-          contacts.map((c) => (
-            <div key={c.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
-              <div className="flex items-center space-x-3 min-w-0">
-                <div className="w-11 h-11 rounded-full bg-[#e8f4fc] text-[#0088cc] flex items-center justify-center font-bold text-base border border-blue-100">
-                  {c.name[0]?.toUpperCase() || "U"}
+          <span className="text-[11px] text-neutral-400 mt-1">Story</span>
+        </div>
+
+        {["রবিন", "Kadir Bodai", "Planet", "Marketpla.."].map((item, idx) => (
+          <div key={idx} className="flex flex-col items-center flex-shrink-0">
+            <div className="relative">
+              <div className="w-12 h-12 rounded-full bg-[#2a2e38] border-2 border-green-500/80 flex items-center justify-center font-bold text-sm text-cyan-300">
+                {item[0]}
+              </div>
+              <span className="absolute -top-1 -right-1 bg-green-500 text-black text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center border border-black">
+                1
+              </span>
+            </div>
+            <span className="text-[11px] text-neutral-300 mt-1 truncate w-14 text-center">{item}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Chat List */}
+      <div className="flex-1 overflow-y-auto divide-y divide-neutral-800/60 bg-[#17181c]">
+        {INITIAL_CONTACTS.map((c) => (
+          <div 
+            key={c.id} 
+            onClick={() => setActiveChat(c)}
+            className="flex items-center justify-between px-3.5 py-3 hover:bg-[#1f2228] transition cursor-pointer"
+          >
+            <div className="flex items-center space-x-3 flex-1 min-w-0">
+              <div className="relative flex-shrink-0">
+                <div className="w-12 h-12 rounded-full bg-[#272b34] text-cyan-400 flex items-center justify-center font-bold text-base border border-neutral-700">
+                  {c.name[0]}
                 </div>
-                <div className="min-w-0">
-                  <h3 className="font-semibold text-slate-800 text-sm truncate">{c.name}</h3>
-                  <p className="text-xs text-slate-400 truncate">{c.tel || "Mobile"}</p>
-                </div>
+                {c.online && (
+                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#17181c]"></span>
+                )}
               </div>
 
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => startCall(c.name)}
-                  className="p-2 text-[#0088cc] hover:bg-blue-50 rounded-full transition"
-                >
-                  <Phone className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => startCall(c.name)}
-                  className="p-2 text-green-600 hover:bg-green-50 rounded-full transition"
-                >
-                  <Video className="w-4 h-4" />
-                </button>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-neutral-100 text-sm truncate">{c.name}</h3>
+                  <span className="text-[10px] text-neutral-500">{c.time}</span>
+                </div>
+                <p className="text-xs text-neutral-400 truncate mt-0.5">{c.sub}</p>
               </div>
             </div>
-          ))
-        )}
+
+            <div className="flex items-center space-x-3 pl-3">
+              {c.unread ? (
+                <span className="bg-green-500 text-black text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {c.unread}
+                </span>
+              ) : null}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveChat(c);
+                  setInCall("audio");
+                }}
+                className="p-1 text-cyan-400 hover:text-cyan-300"
+              >
+                <Phone className="w-5 h-5 fill-cyan-400" />
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Bottom Tabs */}
-      <div className="bg-white border-t border-slate-200 py-2 px-6 flex justify-around items-center text-slate-500 shadow-inner">
-        <button 
-          onClick={() => setActiveTab("chats")}
-          className={`flex flex-col items-center ${activeTab === "chats" ? "text-[#0088cc]" : "text-slate-400"}`}
-        >
-          <MessageSquare className="w-5 h-5" />
-          <span className="text-[10px] mt-1 font-medium">Chats</span>
+      {/* Bottom Floating Bar */}
+      <div className="p-3 bg-[#17181c] flex items-center justify-between px-6 border-t border-neutral-800">
+        <button className="text-cyan-400 text-xl font-bold">
+          <Plus className="w-6 h-6" />
         </button>
-        <button 
-          onClick={() => setActiveTab("contacts")}
-          className={`flex flex-col items-center ${activeTab === "contacts" ? "text-[#0088cc]" : "text-slate-400"}`}
-        >
-          <Users className="w-5 h-5" />
-          <span className="text-[10px] mt-1 font-medium">Contacts</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab("explore")}
-          className={`flex flex-col items-center ${activeTab === "explore" ? "text-[#0088cc]" : "text-slate-400"}`}
-        >
-          <Compass className="w-5 h-5" />
-          <span className="text-[10px] mt-1 font-medium">Explore</span>
+        <button className="text-cyan-400">
+          <Search className="w-6 h-6" />
         </button>
       </div>
     </div>
