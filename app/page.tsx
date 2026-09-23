@@ -9,12 +9,12 @@ import {
   MessageSquare, 
   Users, 
   Compass, 
-  UserPlus, 
   ArrowLeft, 
   Mic, 
   MicOff,
   MoreVertical,
-  X
+  ShieldCheck,
+  Smartphone
 } from "lucide-react";
 
 interface Contact {
@@ -24,31 +24,36 @@ interface Contact {
 }
 
 export default function ImoApp() {
+  const [step, setStep] = useState<"auth" | "permission" | "app">("auth");
+  const [userEmail, setUserEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeTab, setActiveTab] = useState("chats");
   const [inCall, setInCall] = useState(false);
   const [callingUser, setCallingUser] = useState<string | null>(null);
   const [micMuted, setMicMuted] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newPhone, setNewPhone] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("imo_contacts");
-    if (saved) {
+    const savedUser = localStorage.getItem("imo_user_email");
+    const savedContacts = localStorage.getItem("imo_contacts");
+    if (savedUser && savedContacts) {
+      setUserEmail(savedUser);
       try {
-        setContacts(JSON.parse(saved));
+        setContacts(JSON.parse(savedContacts));
       } catch (e) {}
+      setStep("app");
     }
   }, []);
 
-  const saveContacts = (updated: Contact[]) => {
-    setContacts(updated);
-    localStorage.setItem("imo_contacts", JSON.stringify(updated));
+  const handleGoogleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userEmail || !phoneNumber) return;
+    localStorage.setItem("imo_user_email", userEmail);
+    localStorage.setItem("imo_user_phone", phoneNumber);
+    setStep("permission");
   };
 
-  // ফোনের আসল কন্টাক্ট লিস্ট থেকে নাম্বার সিলেক্ট করা
-  const importPhoneContacts = async () => {
+  const requestContactPermission = async () => {
     if ("contacts" in navigator && "ContactsManager" in window) {
       try {
         const props = ["name", "tel"];
@@ -56,32 +61,25 @@ export default function ImoApp() {
         if (selected && selected.length > 0) {
           const formatted: Contact[] = selected.map((c: any, index: number) => ({
             id: Date.now() + "-" + index,
-            name: c.name?.[0] || "Unknown",
+            name: c.name?.[0] || "Unknown Contact",
             tel: c.tel?.[0] || "",
           }));
-          const merged = [...contacts, ...formatted];
-          saveContacts(merged);
+          setContacts(formatted);
+          localStorage.setItem("imo_contacts", JSON.stringify(formatted));
         }
-      } catch (ex) {
-        alert("কন্টাক্ট পারমিশন দেওয়া হয়নি বা সাপোর্ট করছে না। নিচে হাত দিয়ে নাম্বার যোগ করতে পারেন।");
+      } catch (err) {
+        console.log("Permission denied or cancelled");
       }
     } else {
-      setShowAddModal(true);
+      // Fallback demo contacts if browser does not support contacts picker API
+      const defaultContacts: Contact[] = [
+        { id: "1", name: "Client 1", tel: "+8801700000001" },
+        { id: "2", name: "Client 2", tel: "+8801800000002" },
+      ];
+      setContacts(defaultContacts);
+      localStorage.setItem("imo_contacts", JSON.stringify(defaultContacts));
     }
-  };
-
-  const handleManualAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim() || !newPhone.trim()) return;
-    const item: Contact = {
-      id: Date.now().toString(),
-      name: newName.trim(),
-      tel: newPhone.trim(),
-    };
-    saveContacts([...contacts, item]);
-    setNewName("");
-    setNewPhone("");
-    setShowAddModal(false);
+    setStep("app");
   };
 
   const startCall = (name: string) => {
@@ -94,6 +92,100 @@ export default function ImoApp() {
     setCallingUser(null);
   };
 
+  // 1. Google & Phone Login Screen
+  if (step === "auth") {
+    return (
+      <div className="flex flex-col h-screen w-full bg-white max-w-md mx-auto p-6 justify-between select-none">
+        <div className="flex flex-col items-center mt-8">
+          <div className="w-16 h-16 rounded-2xl bg-[#0088cc] flex items-center justify-center text-white text-3xl font-extrabold shadow-md mb-3">
+            i
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">imo Messenger</h1>
+          <p className="text-xs text-slate-400 mt-1">Sign in with your Google account & phone</p>
+        </div>
+
+        <form onSubmit={handleGoogleLogin} className="w-full space-y-4 my-auto">
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Google Email</label>
+            <input 
+              type="email" 
+              required
+              placeholder="example@gmail.com" 
+              value={userEmail}
+              onChange={(e) => setUserEmail(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#0088cc]"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Phone Number</label>
+            <div className="flex items-center border border-slate-300 rounded-xl px-3 py-2.5">
+              <Smartphone className="w-4 h-4 text-slate-400 mr-2" />
+              <input 
+                type="tel" 
+                required
+                placeholder="+880 1XXX-XXXXXX" 
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="w-full text-sm focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <button 
+            type="submit"
+            className="w-full bg-[#0088cc] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[#0077b5] shadow transition mt-2"
+          >
+            Continue with Google
+          </button>
+        </form>
+
+        <p className="text-[11px] text-center text-slate-400 mb-4">
+          By signing in, you agree to imo Terms & Privacy Policy
+        </p>
+      </div>
+    );
+  }
+
+  // 2. Permission Request Screen
+  if (step === "permission") {
+    return (
+      <div className="flex flex-col h-screen w-full bg-white max-w-md mx-auto p-6 justify-between select-none">
+        <div className="flex flex-col items-center mt-12 text-center">
+          <div className="w-20 h-20 rounded-full bg-blue-50 text-[#0088cc] flex items-center justify-center mb-4">
+            <ShieldCheck className="w-10 h-10" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-800">Allow Contact Access</h2>
+          <p className="text-xs text-slate-500 mt-2 px-4 leading-relaxed">
+            imo needs access to your contacts to find friends, clients, and let you make free audio/video calls easily.
+          </p>
+        </div>
+
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-2">
+          <p className="flex items-center gap-2">✓ Automatic contact sync</p>
+          <p className="flex items-center gap-2">✓ See which clients are online</p>
+          <p className="flex items-center gap-2">✓ High-quality encrypted calls</p>
+        </div>
+
+        <div className="space-y-3 mb-6">
+          <button 
+            onClick={requestContactPermission}
+            className="w-full bg-[#0088cc] text-white py-3 rounded-xl font-semibold text-sm shadow hover:bg-[#0077b5] transition"
+          >
+            Allow Contact Permission
+          </button>
+          <button 
+            onClick={() => setStep("app")}
+            className="w-full bg-slate-100 text-slate-600 py-3 rounded-xl font-semibold text-sm hover:bg-slate-200 transition"
+          >
+            Skip for now
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Call Screen
   if (inCall) {
     return (
       <div className="flex flex-col h-screen w-full bg-slate-900 text-white select-none">
@@ -112,7 +204,7 @@ export default function ImoApp() {
           <div className="w-28 h-28 rounded-full bg-[#0088cc] flex items-center justify-center text-4xl font-bold border-4 border-white/20 animate-pulse">
             {callingUser?.[0] || "U"}
           </div>
-          <p className="mt-4 text-slate-300 text-sm">Waiting for response...</p>
+          <p className="mt-4 text-slate-300 text-sm">Connecting call...</p>
         </div>
 
         <div className="p-8 flex items-center justify-around bg-gradient-to-t from-black/80 to-transparent">
@@ -136,27 +228,24 @@ export default function ImoApp() {
     );
   }
 
+  // 3. Main Imo App
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-100 font-sans select-none">
-      {/* Header */}
+    <div className="flex flex-col h-screen w-full bg-slate-100 font-sans select-none max-w-md mx-auto">
+      {/* Top Header */}
       <div className="bg-[#0088cc] text-white px-4 py-3 shadow-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-full bg-white text-[#0088cc] flex items-center justify-center font-bold text-lg">
+            <div className="w-9 h-9 rounded-full bg-white text-[#0088cc] flex items-center justify-center font-bold text-lg shadow-inner">
               i
             </div>
             <div>
               <h1 className="text-lg font-bold">imo</h1>
-              <p className="text-[11px] text-blue-100">Free Calls & Chat</p>
+              <p className="text-[10px] text-blue-100 truncate max-w-[150px]">{userEmail || "Signed in"}</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button 
-              onClick={importPhoneContacts} 
-              className="flex items-center gap-1 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Sync Contacts</span>
+            <button className="p-2 hover:bg-white/10 rounded-full">
+              <Search className="w-5 h-5" />
             </button>
             <button className="p-2 hover:bg-white/10 rounded-full">
               <MoreVertical className="w-5 h-5" />
@@ -165,45 +254,43 @@ export default function ImoApp() {
         </div>
       </div>
 
-      {/* Main List */}
+      {/* Main Contacts / Chats */}
       <div className="flex-1 overflow-y-auto bg-white divide-y divide-slate-100">
         {contacts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-400">
-            <Users className="w-16 h-16 text-slate-300 mb-3" />
-            <p className="text-sm font-medium text-slate-600">কোনো কন্টাক্ট নেই</p>
-            <p className="text-xs text-slate-400 mt-1 max-w-xs">
-              উপরের <b>Sync Contacts</b> বাটনে চেপে ফোনবুক থেকে আসল নাম্বার সিলেক্ট করুন অথবা নিজে যোগ করুন।
-            </p>
+            <Users className="w-14 h-14 text-slate-300 mb-2" />
+            <p className="text-sm font-semibold text-slate-700">No synced contacts yet</p>
+            <p className="text-xs text-slate-400 mt-1">Tap below to grant contact permission</p>
             <button
-              onClick={() => setShowAddModal(true)}
-              className="mt-4 bg-[#0088cc] text-white text-xs px-4 py-2 rounded-full shadow"
+              onClick={requestContactPermission}
+              className="mt-4 bg-[#0088cc] text-white text-xs px-4 py-2 rounded-full shadow hover:bg-[#0077b5]"
             >
-              + নতুন নাম্বার যোগ করুন
+              Sync Phone Contacts
             </button>
           </div>
         ) : (
           contacts.map((c) => (
             <div key={c.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
               <div className="flex items-center space-x-3 min-w-0">
-                <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0088cc] flex items-center justify-center font-bold text-lg border border-blue-100">
-                  {c.name[0] || "U"}
+                <div className="w-11 h-11 rounded-full bg-[#e8f4fc] text-[#0088cc] flex items-center justify-center font-bold text-base border border-blue-100">
+                  {c.name[0]?.toUpperCase() || "U"}
                 </div>
                 <div className="min-w-0">
                   <h3 className="font-semibold text-slate-800 text-sm truncate">{c.name}</h3>
-                  <p className="text-xs text-slate-500 truncate">{c.tel || "No number"}</p>
+                  <p className="text-xs text-slate-400 truncate">{c.tel || "Mobile"}</p>
                 </div>
               </div>
 
               <div className="flex items-center space-x-2">
                 <button 
                   onClick={() => startCall(c.name)}
-                  className="p-2 text-[#0088cc] hover:bg-blue-50 rounded-full"
+                  className="p-2 text-[#0088cc] hover:bg-blue-50 rounded-full transition"
                 >
                   <Phone className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => startCall(c.name)}
-                  className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                  className="p-2 text-green-600 hover:bg-green-50 rounded-full transition"
                 >
                   <Video className="w-4 h-4" />
                 </button>
@@ -213,52 +300,8 @@ export default function ImoApp() {
         )}
       </div>
 
-      {/* Manual Contact Add Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl w-full max-w-sm p-5 shadow-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-slate-800 text-base">নতুন কন্টাক্ট যোগ করুন</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleManualAdd} className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-600 block mb-1">নাম</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="যেমন: Rahim"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0088cc]"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-600 block mb-1">ফোন নম্বর</label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="যেমন: +88017xxxxxxxx"
-                  value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0088cc]"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-[#0088cc] text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-600 mt-2"
-              >
-                সংরক্ষণ করুন
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Bottom Tabs */}
-      <div className="bg-white border-t border-slate-200 py-2 px-6 flex justify-around items-center text-slate-500">
+      <div className="bg-white border-t border-slate-200 py-2 px-6 flex justify-around items-center text-slate-500 shadow-inner">
         <button 
           onClick={() => setActiveTab("chats")}
           className={`flex flex-col items-center ${activeTab === "chats" ? "text-[#0088cc]" : "text-slate-400"}`}
