@@ -1,90 +1,123 @@
 "use client";
 
-import { useState } from "react";
-import AgoraRTC, { IAgoraRTCClient } from "agora-rtc-sdk-ng";
-import { Phone, Video, PhoneOff, User, MessageSquare } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Video, PhoneOff, User } from "lucide-react";
 
-const APP_ID = "আপনার_AGORA_APP_ID"; 
+const APP_ID = "YOUR_AGORA_APP_ID";
 
-export default function MobileImo() {
-  const [inCall, setInCall] = useState(false);
-  const [client, setClient] = useState<IAgoraRTCClient | null>(null);
+export default function ImoPage() {
+  const [joined, setJoined] = useState(false);
+  const [localAudioTrack, setLocalAudioTrack] = useState<any>(null);
+  const [localVideoTrack, setLocalVideoTrack] = useState<any>(null);
+  const [client, setClient] = useState<any>(null);
+  const localVideoRef = useRef<HTMLDivElement>(null);
+  const remoteVideoRef = useRef<HTMLDivElement>(null);
 
-  const startCall = async () => {
-    const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-    setClient(agoraClient);
+  useEffect(() => {
+    let agoraClient: any = null;
+    const init = async () => {
+      const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
+      agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+      setClient(agoraClient);
 
-    agoraClient.on("user-published", async (user, mediaType) => {
-      await agoraClient.subscribe(user, mediaType);
-      if (mediaType === "video") {
-        user.videoTrack?.play("remote-screen");
+      agoraClient.on("user-published", async (user: any, mediaType: "audio" | "video") => {
+        await agoraClient.subscribe(user, mediaType);
+        if (mediaType === "video") {
+          const remoteTrack = user.videoTrack;
+          if (remoteVideoRef.current) {
+            remoteTrack.play(remoteVideoRef.current);
+          }
+        }
+        if (mediaType === "audio") {
+          user.audioTrack.play();
+        }
+      });
+    };
+    init();
+
+    return () => {
+      if (agoraClient) {
+        agoraClient.leave();
       }
-      if (mediaType === "audio") {
-        user.audioTrack?.play();
-      }
-    });
+    };
+  }, []);
 
-    await agoraClient.join(APP_ID, "main-channel", null, null);
-    const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-    const videoTrack = await AgoraRTC.createCameraVideoTrack();
+  const joinChannel = async () => {
+    if (!client) return;
+    const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
+    await client.join(APP_ID, "main-channel", null, null);
+    const audio = await AgoraRTC.createMicrophoneAudioTrack();
+    const video = await AgoraRTC.createCameraVideoTrack();
+    setLocalAudioTrack(audio);
+    setLocalVideoTrack(video);
 
-    videoTrack.play("local-screen");
-    await agoraClient.publish([audioTrack, videoTrack]);
-    setInCall(true);
+    if (localVideoRef.current) {
+      video.play(localVideoRef.current);
+    }
+    await client.publish([audio, video]);
+    setJoined(true);
   };
 
-  const endCall = async () => {
-    if (client) await client.leave();
-    setInCall(false);
+  const leaveChannel = async () => {
+    if (localAudioTrack) {
+      localAudioTrack.stop();
+      localAudioTrack.close();
+    }
+    if (localVideoTrack) {
+      localVideoTrack.stop();
+      localVideoTrack.close();
+    }
+    if (client) {
+      await client.leave();
+    }
+    setJoined(false);
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-white max-w-md mx-auto">
-      <div className="p-4 bg-sky-600 flex justify-between items-center shadow-md">
-        <h1 className="text-xl font-bold tracking-wide">imo Clone</h1>
-        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold">U</div>
-      </div>
-
-      <div className="flex-1 p-4 flex flex-col justify-center items-center relative">
-        {inCall ? (
-          <div className="w-full h-full relative rounded-2xl overflow-hidden bg-black flex flex-col justify-end p-4">
-            <div id="remote-screen" className="absolute inset-0 w-full h-full" />
-            <div id="local-screen" className="absolute top-4 right-4 w-28 h-40 bg-slate-800 rounded-xl border border-white/20 z-10" />
-            <button onClick={endCall} className="z-20 self-center bg-red-600 p-4 rounded-full shadow-lg">
-              <PhoneOff className="w-6 h-6 text-white" />
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-50 border shadow-lg">
+      {/* IMO Header */}
+      <div className="bg-[#0088cc] text-white p-4 flex items-center justify-between shadow">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">
+            <User className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="font-semibold text-lg leading-tight">Friend 1</h1>
+            <p className="text-xs text-blue-100 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-green-400 inline-block"></span> Online
+            </p>
+          </div>
+        </div>
+        <div className="flex space-x-2">
+          {!joined ? (
+            <button
+              onClick={joinChannel}
+              className="bg-green-500 hover:bg-green-600 p-2.5 rounded-full text-white shadow"
+            >
+              <Video className="w-5 h-5" />
             </button>
-          </div>
-        ) : (
-          <div className="w-full space-y-4">
-            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-sky-500 rounded-full flex items-center justify-center font-bold text-lg">F</div>
-                <div>
-                  <h3 className="font-semibold text-base">Friend 1</h3>
-                  <p className="text-xs text-green-400">Online</p>
-                </div>
-              </div>
-              <button onClick={startCall} className="p-3 bg-sky-600 hover:bg-sky-500 rounded-full">
-                <Video className="w-5 h-5 text-white" />
-              </button>
-            </div>
-          </div>
-        )}
+          ) : (
+            <button
+              onClick={leaveChannel}
+              className="bg-red-500 hover:bg-red-600 p-2.5 rounded-full text-white shadow"
+            >
+              <PhoneOff className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-slate-800 border-t border-slate-700 p-3 flex justify-around items-center">
-        <button className="flex flex-col items-center text-sky-400 text-xs">
-          <MessageSquare className="w-5 h-5" />
-          <span>Chats</span>
-        </button>
-        <button className="flex flex-col items-center text-gray-400 text-xs">
-          <Phone className="w-5 h-5" />
-          <span>Calls</span>
-        </button>
-        <button className="flex flex-col items-center text-gray-400 text-xs">
-          <User className="w-5 h-5" />
-          <span>Contacts</span>
-        </button>
+      {/* Video Area */}
+      <div className="flex-1 bg-neutral-900 relative flex flex-col items-center justify-center">
+        <div ref={remoteVideoRef} className="w-full h-full absolute inset-0 flex items-center justify-center">
+          {!joined && <p className="text-gray-400 text-sm">কল শুরু করতে উপরের ভিডিও বাটনে চাপুন</p>}
+        </div>
+        {joined && (
+          <div
+            ref={localVideoRef}
+            className="absolute top-4 right-4 w-28 h-40 bg-black rounded-lg border-2 border-white overflow-hidden shadow-lg z-10"
+          />
+        )}
       </div>
     </div>
   );
